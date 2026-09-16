@@ -6,11 +6,11 @@
   <title>Owner Panel — Database Admin</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    :root{--bg:#0d1b14;--card:#162b22;--border:rgba(255,255,255,.07);--orange:#e85800;--cream:#f0ede5;--muted:#7a9c8b;--green:#2a754e;--green-bright:#32e078}
+    :root{--bg:#05140b;--card:#12311f;--border:rgba(116,198,157,.18);--orange:#2d9f58;--gold:#e9c46a;--cream:#f4f9f4;--muted:#88a995;--green:#2a754e;--green-bright:#38b000}
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--cream);min-height:100vh;padding:1.6rem}
     h1{font-size:1.35rem;font-weight:800;color:var(--cream);margin-bottom:.3rem}
-    h1 span{color:var(--orange)}
+    h1 span{color:var(--gold)}
     .sub{font-size:.78rem;color:var(--muted);margin-bottom:1.5rem}
 
     /* LOGIN */
@@ -20,8 +20,8 @@
     #loginBox input{width:100%;padding:.75rem 1rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--cream);font-size:.9rem;margin-bottom:.9rem;outline:none;font-family:inherit}
     #loginBox input:focus{border-color:var(--orange)}
     .btn{padding:.75rem 1.5rem;border-radius:8px;border:none;font-weight:700;cursor:pointer;font-family:inherit;font-size:.85rem;transition:all .2s}
-    .btn-orange{background:var(--orange);color:#fff;width:100%}
-    .btn-orange:hover{background:#ff6600}
+    .btn-orange{background:linear-gradient(135deg,#2d9f58,#1b6e3b);color:#fff;width:100%}
+    .btn-orange:hover{background:linear-gradient(135deg,#34b363,#228a49)}
     .error{color:#ff4040;font-size:.78rem;margin-top:.6rem;display:none}
 
     /* ADMIN PANEL */
@@ -98,13 +98,18 @@
 </div>
 
 <script>
+const API_BASE = (function(){
+  if(window.location.protocol === 'file:') return 'http://127.0.0.1:5000';
+  if(window.location.port && window.location.port !== '5000') return 'http://127.0.0.1:5000';
+  return '';
+})();
 let adminPwd='';
 
 async function doLogin(){
   const pwd=document.getElementById('pwdInput').value;
   const err=document.getElementById('loginErr');
   try{
-    const res=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
+    const res=await fetch(API_BASE + '/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
     const d=await res.json();
     if(d.success){
       adminPwd=pwd;
@@ -131,30 +136,29 @@ function doLogout(){
 
 async function loadStats(){
   try{
-    const res=await fetch('/api/admin/stats',{headers:{'X-Admin-Key':adminPwd}});
+    const res=await fetch(API_BASE + '/api/admin/stats',{headers:{'X-Admin-Key':adminPwd}});
     const d=await res.json();
     if(d.backend){
       document.getElementById('dbEnginePill').textContent=`Active Engine: ${d.backend}`;
     }
     const g=document.getElementById('statsGrid');
     g.innerHTML='';
-    const labels={
-      'pipeline_runs':'Total Pipeline Runs',
-      'severity_records':'Regional Severity Records',
-      'allocation_records':'Resource Allocations',
-      'iot_readings':'Field IoT Readings',
-      'emergency_events':'Emergency Incidents'
-    };
-    Object.entries(d).forEach(([k,v])=>{
-      if(k==='backend')return;
-      g.innerHTML+=`
-        <div class="statc">
-          <div class="label">${labels[k]||k}</div>
-          <div class="val">${v}</div>
-        </div>
-      `;
+    const items=[
+      ['Runs Logged', d.stats.pipeline_runs||0],
+      ['Alerts Stored', d.stats.alerts||0],
+      ['IoT Readings', d.stats.iot_readings||0],
+      ['Weather Snapshots', d.stats.weather_snapshots||0],
+      ['Satellite Analyses', d.stats.satellite_analyses||0],
+      ['Simulations Run', d.stats.simulation_runs||0],
+      ['DB Backend', d.backend||'Unknown'],
+      ['Status', 'Active Online']
+    ];
+    items.forEach(([k,v])=>{
+      g.innerHTML+=`<div class="scard"><div class="val">${v}</div><div class="lbl">${k}</div></div>`;
     });
-  }catch(e){console.error(e)}
+  }catch(e){
+    console.error('Stats error:', e);
+  }
 }
 
 async function loadTable(name, btn){
@@ -165,7 +169,7 @@ async function loadTable(name, btn){
   const wrap=document.getElementById('tableWrap');
   wrap.innerHTML='<div class="empty">Loading…</div>';
   try{
-    const res=await fetch('/api/admin/'+name,{headers:{'X-Admin-Key':adminPwd}});
+    const res=await fetch(API_BASE + '/api/admin/'+name,{headers:{'X-Admin-Key':adminPwd}});
     const data=await res.json();
     if(!data.length){wrap.innerHTML='<div class="empty">No records found.</div>';return}
     const keys=Object.keys(data[0]);

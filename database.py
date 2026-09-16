@@ -1,12 +1,14 @@
 """
 AI in Agriculture — Resilient Dual Database Module
 Supports MongoDB with automatic, seamless fallback to SQLite.
-Guarantees 100% database availability for pipeline runs, sensor readings,
-severity scores, resource allocations, and emergency event history.
+Provides full persistence for Users (Local & Google OAuth), Auth Sessions,
+Pipeline Runs, Sensor Readings, Severity Scores, Resource Allocations, and Events.
 """
 
 import os
 import sqlite3
+import hashlib
+import secrets
 from datetime import datetime
 from bson import ObjectId
 
@@ -19,8 +21,47 @@ mongo_client = None
 mongo_db = None
 
 
+# ─── PASSWORD SECURITY ──────────────────────────────────────────
+
+def _hash_password(password, salt=None):
+    if not salt:
+        salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000)
+    return key.hex(), salt
+
+
+def _verify_password(password, stored_hash, salt):
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000)
+    return secrets.compare_digest(key.hex(), stored_hash)
+
+
+# ─── SQLITE SCHEMA ──────────────────────────────────────────────
+
 def _init_sqlite_tables(conn):
     cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        email TEXT UNIQUE,
+        password_hash TEXT,
+        salt TEXT,
+        role TEXT,
+        avatar TEXT,
+        provider TEXT DEFAULT 'local',
+        created_at TEXT,
+        last_login TEXT
+    )""")
+    # Ensure avatar & provider columns exist if older schema
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN provider TEXT DEFAULT 'local'")
+    except Exception:
+        pass
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS pipeline_runs (
         run_id TEXT PRIMARY KEY,
@@ -72,6 +113,7 @@ def _init_sqlite_tables(conn):
         severity_score REAL,
         status TEXT,
         notes TEXT,
+        author TEXT,
         created_at TEXT,
         resolved_at TEXT
     )""")
@@ -110,8 +152,9 @@ def init_db():
         client.admin.command("ping")
         mongo_client = client
         mongo_db = client[DB_NAME]
-        
+
         # MongoDB indexes
+        mongo_db["users"].create_index("email", unique=True)
         mongo_db["pipeline_runs"].create_index("run_id", unique=True)
         mongo_db["severity_records"].create_index("run_id")
         mongo_db["allocation_records"].create_index("run_id")
@@ -130,6 +173,8 @@ def init_db():
         with _get_sqlite_conn() as conn:
             _init_sqlite_tables(conn)
 
+    seed_default_users()
+
 
 def get_backend_info():
     return {
@@ -137,6 +182,188 @@ def get_backend_info():
         "target": DB_NAME if ACTIVE_BACKEND == "mongodb" else SQLITE_DB_PATH,
         "status": "connected"
     }
+
+
+# ─── USER AUTHENTICATION & GOOGLE OAUTH ─────────────────────────
+
+def create_user(name, email, password, role="Agricultural Officer", avatar=None, provider="local"):
+    """Register a new user with secure password hashing."""
+    email_clean = email.strip().lower()
+    name_clean = name.strip()
+    if not email_clean or not name_clean:
+        return None, "Name and email are required."
+
+    if get_user_by_email(email_clean):
+        return None, "An account with this email address already exists."
+
+    user_id = secrets.token_hex(8)
+    pwd_hash, salt = _hash_password(password or secrets.token_urlsafe(16))
+    now = datetime.now().isoformat()
+
+    user_doc = {
+        "id": user_id,
+        "name": name_clean,
+        "email": email_clean,
+        "password_hash": pwd_hash,
+        "salt": salt,
+        "role": role,
+        "avatar": avatar,
+        "provider": provider,
+        "created_at": now,
+        "last_login": now
+    }
+
+    if ACTIVE_BACKEND == "mongodb":
+        mongo_db["users"].insert_one(user_doc)
+    else:
+        with _get_sqlite_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO users (id, name, email, password_hash, salt, role, avatar, provider, created_at, last_login)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, name_clean, email_clean, pwd_hash, salt, role, avatar, provider, now, now))
+            conn.commit()
+
+    return {
+        "id": user_id,
+        "name": name_clean,
+        "email": email_clean,
+        "role": role,
+        "avatar": avatar,
+        "provider": provider,
+        "created_at": now,
+        "last_login": now
+    }, None
+
+
+def authenticate_user(email, password):
+    """Authenticate a local user by email and password."""
+    email_clean = email.strip().lower()
+    now = datetime.now().isoformat()
+
+    if ACTIVE_BACKEND == "mongodb":
+        user = mongo_db["users"].find_one({"email": email_clean})
+        if not user:
+            return None
+        if _verify_password(password, user.get("password_hash", ""), user.get("salt", "")):
+            mongo_db["users"].update_one({"email": email_clean}, {"$set": {"last_login": now}})
+            return {
+                "id": str(user.get("id", user.get("_id"))),
+                "name": user["name"],
+                "email": user["email"],
+                "role": user.get("role", "Agricultural Officer"),
+                "avatar": user.get("avatar"),
+                "provider": user.get("provider", "local"),
+                "last_login": now
+            }
+        return None
+    else:
+        with _get_sqlite_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, email, password_hash, salt, role, avatar, provider FROM users WHERE email = ?", (email_clean,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            if _verify_password(password, row["password_hash"], row["salt"]):
+                cur.execute("UPDATE users SET last_login = ? WHERE email = ?", (now, email_clean))
+                conn.commit()
+                return {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "email": row["email"],
+                    "role": row["role"] or "Agricultural Officer",
+                    "avatar": row["avatar"],
+                    "provider": row["provider"] or "local",
+                    "last_login": now
+                }
+            return None
+
+
+def create_or_get_google_user(google_id, name, email, avatar=None, role="Agricultural Officer"):
+    """Handle Google Sign-In: retrieve existing user or create a new profile."""
+    email_clean = email.strip().lower()
+    now = datetime.now().isoformat()
+
+    existing = get_user_by_email(email_clean)
+    if existing:
+        # Update avatar and last_login
+        if ACTIVE_BACKEND == "mongodb":
+            mongo_db["users"].update_one(
+                {"email": email_clean},
+                {"$set": {"last_login": now, "avatar": avatar or existing.get("avatar")}}
+            )
+        else:
+            with _get_sqlite_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("UPDATE users SET last_login = ?, avatar = COALESCE(?, avatar) WHERE email = ?", (now, avatar, email_clean))
+                conn.commit()
+        existing["last_login"] = now
+        if avatar:
+            existing["avatar"] = avatar
+        return existing
+
+    # Create new Google user
+    user, _ = create_user(
+        name=name,
+        email=email_clean,
+        password=secrets.token_hex(16),
+        role=role,
+        avatar=avatar,
+        provider="google"
+    )
+    return user
+
+
+def get_user_by_email(email):
+    email_clean = email.strip().lower()
+    if ACTIVE_BACKEND == "mongodb":
+        user = mongo_db["users"].find_one({"email": email_clean})
+        if user:
+            d = _clean_doc(user)
+            d.pop("password_hash", None)
+            d.pop("salt", None)
+            return d
+        return None
+    else:
+        with _get_sqlite_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, email, role, avatar, provider, created_at, last_login FROM users WHERE email = ?", (email_clean,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def get_user_by_id(user_id):
+    if ACTIVE_BACKEND == "mongodb":
+        query = {}
+        try:
+            query = {"_id": ObjectId(str(user_id))}
+        except Exception:
+            query = {"id": str(user_id)}
+        user = mongo_db["users"].find_one(query)
+        if user:
+            d = _clean_doc(user)
+            d.pop("password_hash", None)
+            d.pop("salt", None)
+            return d
+        return None
+    else:
+        with _get_sqlite_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, email, role, avatar, provider, created_at, last_login FROM users WHERE id = ?", (str(user_id),))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def seed_default_users():
+    defaults = [
+        ("Dhanush R (Lead Officer)", "officer@agri-ai.gov.in", "agri2026", "Senior Agricultural Officer"),
+        ("Dr. Priya Sharma", "relief@agri-ai.gov.in", "relief2026", "Disaster Relief Specialist"),
+        ("District Collector Office", "collector@agri-ai.gov.in", "admin2026", "District Collector"),
+        ("System Administrator", "admin@agri-ai.gov.in", "dhanush2026", "System Administrator"),
+    ]
+    for name, email, pwd, role in defaults:
+        if not get_user_by_email(email):
+            create_user(name, email, pwd, role)
 
 
 # ─── PIPELINE RUNS ──────────────────────────────────────────────
@@ -392,7 +619,7 @@ def get_all_iot():
             return [dict(row) for row in cur.fetchall()]
 
 
-# ─── EMERGENCY EVENTS & ACTION WORKFLOW ─────────────────────────
+# ─── EMERGENCY EVENTS & AUDIT LOG ───────────────────────────────
 
 def save_emergency_events(run_id, events):
     now = datetime.now().isoformat()
@@ -406,6 +633,7 @@ def save_emergency_events(run_id, events):
                 "severity_score": float(e["severity_score"]),
                 "status": e.get("status", "detected"),
                 "notes": e.get("notes", ""),
+                "author": e.get("author", "Automated AI Detection Engine"),
                 "created_at": now,
                 "resolved_at": None
             })
@@ -416,13 +644,15 @@ def save_emergency_events(run_id, events):
             cur = conn.cursor()
             rows = [
                 (run_id, e["region_id"], e.get("predicted_emergency", "Unknown"),
-                 float(e["severity_score"]), e.get("status", "detected"), e.get("notes", ""), now, None)
+                 float(e["severity_score"]), e.get("status", "detected"),
+                 e.get("notes", ""), e.get("author", "Automated AI Detection Engine"),
+                 now, None)
                 for e in events
             ]
             cur.executemany("""
                 INSERT INTO emergency_events
-                (run_id, region_id, emergency_type, severity_score, status, notes, created_at, resolved_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (run_id, region_id, emergency_type, severity_score, status, notes, author, created_at, resolved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, rows)
             conn.commit()
 
@@ -436,29 +666,31 @@ def get_all_events():
         with _get_sqlite_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, run_id, region_id, emergency_type, severity_score, status, notes, created_at, resolved_at
+                SELECT id, run_id, region_id, emergency_type, severity_score, status, notes, author, created_at, resolved_at
                 FROM emergency_events ORDER BY created_at DESC LIMIT 200
             """)
             return [dict(row) for row in cur.fetchall()]
 
 
-def update_emergency_status(event_id, new_status, notes=None):
+def update_emergency_status(event_id, new_status, notes=None, author=None):
     now = datetime.now().isoformat()
     resolved_at = now if new_status == "resolved" else None
-    
+
     if ACTIVE_BACKEND == "mongodb":
         query = {}
         try:
             query = {"_id": ObjectId(str(event_id))}
         except Exception:
             query = {"id": str(event_id)}
-        
+
         update_fields = {"status": new_status}
         if notes:
             update_fields["notes"] = notes
+        if author:
+            update_fields["author"] = author
         if resolved_at:
             update_fields["resolved_at"] = resolved_at
-            
+
         res = mongo_db["emergency_events"].update_one(query, {"$set": update_fields})
         if res.matched_count == 0 and "_id" not in query:
             mongo_db["emergency_events"].update_one({"run_id": str(event_id)}, {"$set": update_fields})
@@ -468,9 +700,9 @@ def update_emergency_status(event_id, new_status, notes=None):
             cur = conn.cursor()
             cur.execute("""
                 UPDATE emergency_events
-                SET status = ?, notes = COALESCE(?, notes), resolved_at = COALESCE(?, resolved_at)
+                SET status = ?, notes = COALESCE(?, notes), author = COALESCE(?, author), resolved_at = COALESCE(?, resolved_at)
                 WHERE id = ? OR run_id = ?
-            """, (new_status, notes, resolved_at, event_id, str(event_id)))
+            """, (new_status, notes, author, resolved_at, event_id, str(event_id)))
             conn.commit()
             return cur.rowcount > 0
 
@@ -495,6 +727,7 @@ def get_db_stats():
     if ACTIVE_BACKEND == "mongodb":
         return {
             "backend": "MongoDB",
+            "users": mongo_db["users"].count_documents({}),
             "pipeline_runs": mongo_db["pipeline_runs"].count_documents({}),
             "severity_records": mongo_db["severity_records"].count_documents({}),
             "allocation_records": mongo_db["allocation_records"].count_documents({}),
@@ -512,6 +745,7 @@ def get_db_stats():
                     return 0
             return {
                 "backend": "SQLite",
+                "users": count("users"),
                 "pipeline_runs": count("pipeline_runs"),
                 "severity_records": count("severity_records"),
                 "allocation_records": count("allocation_records"),
