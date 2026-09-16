@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite databases & temp files
+*.db
+*.sqlite3
+*.log
+
+# Environment variables & secrets
+.env
+.venv/
+env/
+venv/
+
+# IDE / Editor configs
+.vscode/
+.idea/
+.system_generated/
+scratch/

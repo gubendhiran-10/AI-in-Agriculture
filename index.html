@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AI in Agriculture — Emergency Resource Allocation System</title>
+<meta name="description" content="AI-Based Emergency Resource Allocation System for Agriculture — Real-time IoT monitoring, multi-factor ML severity scoring, interactive crisis simulator, and linear optimization dispatch."/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0b1510;
+  --bg2:#112219;
+  --card:#173024;
+  --card2:#1d3d2e;
+  --border:rgba(255,255,255,.07);
+  --border-focus:rgba(232,88,0,.5);
+  --orange:#e85800;
+  --orange-light:#ff7a29;
+  --cream:#f2eee6;
+  --muted:#829e8f;
+  --green:#2a754e;
+  --green-bright:#32e078;
+  --red:#ff3d4d;
+  --amber:#ffa114;
+  --blue:#3399ff;
+  --shadow:0 6px 24px rgba(0,0,0,.4);
+  --r:14px;
+  --t:all .22s cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--cream);min-height:100vh;overflow-x:hidden}
+::selection{background:var(--orange);color:#fff}
+
+/* ═══ SIDEBAR NAV ═══ */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:230px;background:var(--bg2);border-right:1px solid var(--border);z-index:100;display:flex;flex-direction:column;transition:var(--t)}
+.sidebar .brand{padding:1.2rem 1.1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.brand-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--orange),#d43800);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 12px rgba(232,88,0,.35)}
+.brand h1{font-size:.82rem;font-weight:800;color:var(--cream);line-height:1.2}
+.brand p{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.nav{flex:1;padding:.8rem .6rem;display:flex;flex-direction:column;gap:3px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:11px;padding:.65rem .85rem;border-radius:10px;cursor:pointer;font-size:.82rem;font-weight:500;color:var(--muted);transition:var(--t);border:none;background:none;text-align:left;font-family:inherit;width:100%}
+.nav-item:hover{background:rgba(255,255,255,.05);color:var(--cream)}
+.nav-item.active{background:var(--orange);color:#fff;font-weight:700;box-shadow:0 4px 14px rgba(232,88,0,.35)}
+.nav-item .ni{font-size:1.15rem;width:22px;text-align:center}
+.nav-sep{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;padding:.9rem .85rem .35rem;font-weight:700}
+.sidebar-footer{padding:1rem;border-top:1px solid var(--border);font-size:.7rem;color:var(--muted);text-align:center;background:rgba(0,0,0,.15)}
+.sidebar-footer span{color:var(--orange-light);font-weight:700}
+
+/* ═══ MAIN & TOPBAR ═══ */
+.main{margin-left:230px;min-height:100vh;position:relative}
+.topbar{position:sticky;top:0;z-index:90;background:rgba(11,21,16,.88);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);padding:0 1.6rem;height:56px;display:flex;align-items:center;justify-content:space-between}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.page-title{font-size:1.05rem;font-weight:800;color:var(--cream)}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.db-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(50,224,120,.1);border:1px solid rgba(50,224,120,.25);color:var(--green-bright);font-size:.68rem;font-weight:700;padding:4px 9px;border-radius:20px}
+.db-dot{width:6px;height:6px;background:var(--green-bright);border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+.top-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);padding:6px 13px;border-radius:8px;cursor:pointer;font-size:.76rem;font-weight:600;font-family:inherit;transition:var(--t);display:flex;align-items:center;gap:6px}
+.top-btn:hover{background:var(--orange);color:#fff;border-color:var(--orange);box-shadow:0 2px 10px rgba(232,88,0,.3)}
+.top-btn-pri{background:var(--orange);color:#fff;border-color:var(--orange)}
+.top-btn-pri:hover{background:#ff6600}
+.alert-btn{position:relative}
+.alert-count{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:.6rem;font-weight:800;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,61,77,.5)}
+.clock{font-size:.72rem;color:var(--muted);font-family:monospace;font-weight:600}
+
+/* ═══ PAGE ANIMATION ═══ */
+.page{display:none;padding:1.6rem;animation:fadeIn .25s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.stitle{font-size:1.18rem;font-weight:800;color:var(--cream);margin-bottom:1rem;display:flex;align-items:center;gap:10px}
+.stitle::before{content:'';width:4px;height:22px;background:var(--orange);border-radius:3px;flex-shrink:0}
+
+/* ═══ GRIDS & CARDS ═══ */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.5rem}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem;margin-bottom:1.5rem}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:.9rem;margin-bottom:1.5rem}
+@media(max-width:1150px){.g5{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){.g2,.g3,.g5{grid-template-columns:1fr}.sidebar{width:65px}.sidebar .brand h1,.sidebar .brand p,.nav-item span:not(.ni),.nav-sep,.sidebar-footer{display:none}.main{margin-left:65px}}
+
+.card{background:var(--card);border-radius:var(--r);padding:1.3rem;box-shadow:var(--shadow);border:1px solid var(--border)}
+.statc{background:var(--card);border-radius:12px;padding:1rem;border:1px solid var(--border);display:flex;align-items:center;gap:12px;transition:var(--t)}
+.statc:hover{border-color:rgba(232,88,0,.35);transform:translateY(-2px)}
+.statc .si{font-size:1.6rem;width:44px;height:44px;background:rgba(232,88,0,.15);border-radius:10px;display:flex;align-items:center;justify-content:center}
+.statc .sl{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.statc .sv{font-size:1.3rem;font-weight:800;color:var(--orange-light);margin-top:2px}
+
+/* ═══ MAP ═══ */
+#mapBox{border-radius:var(--r);overflow:hidden;height:480px;box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:1.5rem}
+#miniMap{border-radius:var(--r);overflow:hidden;height:310px;box-shadow:var(--shadow);border:1px solid var(--border)}
+
+/* ═══ TABLES ═══ */
+.tw{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin-bottom:1.5rem;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--bg)}
+thead th{padding:.75rem .9rem;font-size:.7rem;font-weight:700;color:var(--orange-light);text-transform:uppercase;letter-spacing:.6px;text-align:left}
+tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .15s}
+tbody tr:hover{background:rgba(255,255,255,.04)}
+tbody td{padding:.75rem .9rem;font-size:.82rem;color:var(--cream)}
+
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:14px;font-size:.72rem;font-weight:700}
+.b-drought{background:#7a3800;color:#ffba70}
+.b-flood{background:#004a8f;color:#85ccff}
+.b-pest{background:#3b6600;color:#bdf774}
+.b-fire{background:#8f1d00;color:#ffa085}
+.b-normal{background:#1a5c36;color:#63fca2}
+
+.status-badge{padding:3px 9px;border-radius:12px;font-size:.68rem;font-weight:700;text-transform:uppercase}
+.status-detected{background:rgba(255,61,77,.2);color:#ff6b78;border:1px solid rgba(255,61,77,.4)}
+.status-dispatched{background:rgba(51,153,255,.2);color:#66b2ff;border:1px solid rgba(51,153,255,.4)}
+.status-resolved{background:rgba(50,224,120,.2);color:#32e078;border:1px solid rgba(50,224,120,.4)}
+
+.sbar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:4px;min-width:85px}
+.sfill{height:100%;border-radius:3px}
+
+/* ═══ CHARTS ═══ */
+.cbox{background:var(--card);border-radius:var(--r);padding:1.2rem;box-shadow:var(--shadow);border:1px solid var(--border)}
+.cbox canvas{max-height:280px}
+
+/* ═══ IOT & WEATHER ═══ */
+.iot-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-bottom:1.5rem}
+.iotc{background:var(--card);border-radius:12px;padding:1.1rem;border:1px solid var(--border);transition:var(--t)}
+.iotc:hover{border-color:rgba(232,88,0,.3);transform:translateY(-2px)}
+.iotc h4{font-size:.82rem;color:var(--orange-light);font-weight:700;margin-bottom:.6rem;display:flex;align-items:center;justify-content:space-between}
+.iotr{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.iotr:last-child{border:none}.iotv{color:var(--cream);font-weight:600}
+
+.wcard{background:var(--card);border-radius:12px;padding:1.2rem;border:1px solid var(--border);text-align:center;transition:var(--t)}
+.wcard:hover{transform:translateY(-3px);border-color:rgba(232,88,0,.3)}
+.wcard .wicon{font-size:2.2rem;margin-bottom:.3rem}
+.wcard h4{font-size:.82rem;color:var(--cream);font-weight:700;margin-bottom:3px}
+.wcard .wtemp{font-size:1.6rem;font-weight:800;color:var(--orange-light)}
+.wcard .wdetail{font-size:.72rem;color:var(--muted);margin-top:.4rem;line-height:1.5}
+
+/* ═══ CRISIS SIMULATOR ═══ */
+.sim-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
+@media(max-width:980px){.sim-grid{grid-template-columns:1fr}}
+.sim-ctrl{display:flex;flex-direction:column;gap:12px}
+.sim-row{display:flex;flex-direction:column;gap:4px}
+.sim-row-head{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;font-weight:600;color:var(--cream)}
+.sim-row-head span:last-child{color:var(--orange-light);font-family:monospace;font-weight:700}
+.sim-slider{width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.12);outline:none;-webkit-appearance:none;cursor:pointer}
+.sim-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--orange);cursor:pointer;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+
+.preset-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem}
+.preset-btn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);padding:5px 11px;border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer;font-family:inherit;transition:var(--t)}
+.preset-btn:hover{background:var(--card2);color:var(--cream);border-color:var(--orange)}
+
+.sim-output{background:var(--bg2);border-radius:var(--r);padding:1.4rem;border:1px solid var(--border);display:flex;flex-direction:column;gap:12px}
+.sim-metric-box{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sm-box{background:var(--card);border-radius:10px;padding:.8rem;border:1px solid var(--border)}
+.sm-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase}
+.sm-val{font-size:1.3rem;font-weight:800;color:var(--cream);margin-top:2px}
+
+/* ═══ CHATBOT & VOICE ═══ */
+.chat-toggle{position:fixed;bottom:24px;right:24px;width:56px;height:56px;background:linear-gradient(135deg,var(--orange),#c83c00);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.6rem;cursor:pointer;box-shadow:0 6px 25px rgba(232,88,0,.45);z-index:200;border:none;color:#fff;transition:var(--t)}
+.chat-toggle:hover{transform:scale(1.08)}
+.chat-panel{position:fixed;bottom:90px;right:24px;width:400px;max-height:560px;background:var(--bg2);border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.6);z-index:200;display:none;flex-direction:column;border:1px solid var(--border);overflow:hidden}
+.chat-panel.open{display:flex}
+.chat-header{background:var(--card);padding:.9rem 1.1rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.chat-header h3{font-size:.9rem;color:var(--cream);display:flex;align-items:center;gap:8px}
+.chat-close{background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer}
+.chat-chips{display:flex;gap:6px;padding:.6rem .8rem;overflow-x:auto;background:rgba(0,0,0,.15);border-bottom:1px solid var(--border)}
+.chip{background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--muted);font-size:.7rem;padding:3px 9px;border-radius:12px;white-space:nowrap;cursor:pointer;transition:var(--t)}
+.chip:hover{background:var(--orange);color:#fff;border-color:var(--orange)}
+.chat-body{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.7rem;max-height:360px}
+.chat-msg{max-width:88%;padding:.65rem .95rem;border-radius:14px;font-size:.82rem;line-height:1.55;word-wrap:break-word;white-space:pre-wrap}
+.chat-bot{background:var(--card);color:var(--cream);align-self:flex-start;border-bottom-left-radius:3px;border:1px solid var(--border)}
+.chat-user{background:var(--orange);color:#fff;align-self:flex-end;border-bottom-right-radius:3px}
+.chat-input-wrap{display:flex;gap:6px;padding:.7rem;border-top:1px solid var(--border);background:var(--card)}
+.chat-input{flex:1;padding:.6rem .9rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--cream);font-size:.85rem;font-family:inherit;outline:none}
+.chat-input:focus{border-color:var(--orange)}
+.chat-send{background:var(--orange);border:none;color:#fff;padding:.6rem 1rem;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:700}
+.voice-btn{background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--muted);width:38px;height:38px;border-radius:8px;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center;transition:var(--t)}
+.voice-btn.listening{background:var(--red);color:#fff;border-color:var(--red);animation:voicePulse 1s ease-in-out infinite}
+@keyframes voicePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,61,77,.4)}50%{box-shadow:0 0 0 10px rgba(255,61,77,0)}}
+
+/* ═══ TOASTS & MODAL ═══ */
+.toast-container{position:fixed;top:66px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.75rem 1.1rem;min-width:300px;box-shadow:0 6px 20px rgba(0,0,0,.5);animation:slideIn .25s ease;display:flex;align-items:center;gap:10px;font-size:.82rem}
+.toast.critical{border-left:4px solid var(--red)}.toast.warning{border-left:4px solid var(--amber)}.toast.info{border-left:4px solid var(--blue)}.toast.success{border-left:4px solid var(--green-bright)}
+@keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:250;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
+.modal-bg.show{display:flex}
+.modal{background:var(--card);border-radius:var(--r);padding:1.6rem;max-width:920px;width:95%;max-height:85vh;overflow-y:auto;box-shadow:0 10px 48px rgba(0,0,0,.6);border:1px solid var(--border)}
+.modal-x{float:right;background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer}
+
+.conclusion{background:linear-gradient(135deg,var(--card),var(--card2));border-radius:var(--r);padding:1.6rem;border-left:5px solid var(--orange);margin-bottom:1.5rem;box-shadow:var(--shadow)}
+.conclusion p{font-size:.92rem;line-height:1.75;color:var(--cream)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══ -->
+<nav class="sidebar">
+  <div class="brand">
+    <div class="brand-icon">🌾</div>
+    <div>
+      <h1>AI Agriculture</h1>
+      <p>Emergency Ops</p>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-sep">Operations</div>
+    <button class="nav-item active" onclick="go('home')"><span class="ni">🏠</span><span>Dashboard</span></button>
+    <button class="nav-item" onclick="go('simulator')"><span class="ni">🧪</span><span>Crisis Simulator</span></button>
+    <button class="nav-item" onclick="go('map')"><span class="ni">🗺️</span><span>Live Map</span></button>
+    <button class="nav-item" onclick="go('pipeline')"><span class="ni">⚡</span><span>AI Pipeline</span></button>
+    <button class="nav-item" onclick="go('alerts')"><span class="ni">🔔</span><span>Disaster Alerts</span></button>
+
+    <div class="nav-sep">Telemetry</div>
+    <button class="nav-item" onclick="go('iot')"><span class="ni">📡</span><span>IoT Sensors</span></button>
+    <button class="nav-item" onclick="go('weather')"><span class="ni">🌤️</span><span>Weather Live</span></button>
+
+    <div class="nav-sep">Intelligence</div>
+    <button class="nav-item" onclick="go('calculator')"><span class="ni">🔢</span><span>Severity Calc</span></button>
+    <button class="nav-item" onclick="go('history')"><span class="ni">📁</span><span>Run History</span></button>
+    <button class="nav-item" onclick="go('tech')"><span class="ni">🔧</span><span>Architecture</span></button>
+    <button class="nav-item" onclick="go('about')"><span class="ni">📋</span><span>About</span></button>
+  </div>
+  <div class="sidebar-footer">
+    Developed by <span>Dhanush</span><br/>
+    Dept. of CSE • Working Model
+  </div>
+</nav>
+
+<!-- ═══ MAIN AREA ═══ -->
+<div class="main">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="db-badge" id="dbIndicator"><span class="db-dot"></span><span id="dbText">Database: Online</span></div>
+      <span class="page-title" id="pageTitle">Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <span class="clock" id="clock"></span>
+      <button class="top-btn top-btn-pri" onclick="runPipeline()">⚡ Run AI Pipeline</button>
+      <button class="top-btn" onclick="go('simulator')">🧪 Simulator</button>
+      <button class="top-btn" onclick="fetchIoT()">📡 IoT Live</button>
+      <button class="top-btn alert-btn" onclick="go('alerts')">🔔<span class="alert-count" id="alertCount">0</span></button>
+      <button class="top-btn" onclick="toggleVoice()" id="voiceTopBtn">🎤</button>
+      <a href="/owner-panel-8x9k2" target="_blank" class="top-btn" style="text-decoration:none">🔐 Admin</a>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: HOME (DASHBOARD) ═══ -->
+  <div class="page active" id="pg-home">
+    <div class="g5" id="homeStats"></div>
+
+    <div class="g2">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:.9rem 1.1rem;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:.85rem;color:var(--cream)">🗺️ Real-Time Regional Crisis Map</strong>
+          <span style="font-size:.7rem;color:var(--muted)">5 Active Belts</span>
+        </div>
+        <div id="miniMap"></div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;justify-content:space-between">
+        <div>
+          <h3 class="stitle" style="font-size:.95rem">Interactive Action Center</h3>
+          <p style="color:var(--muted);font-size:.78rem;margin-bottom:1rem">Execute complete automated workflows or simulate custom agricultural disaster scenarios.</p>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <button class="top-btn top-btn-pri" style="width:100%;justify-content:center;padding:11px" onclick="runPipeline()">
+              ⚡ Run AI Pipeline — Ingest Sensors & Optimize Dispatch
+            </button>
+            <button class="top-btn" style="width:100%;justify-content:center;padding:10px" onclick="go('simulator')">
+              🧪 Open Crisis Simulator — Test Custom Sensor Anomalies
+            </button>
+            <button class="top-btn" style="width:100%;justify-content:center;padding:10px" onclick="fetchIoT()">
+              📡 Refresh IoT Field Sensors (Moisture, Temp, Rain)
+            </button>
+            <button class="top-btn" style="width:100%;justify-content:center;padding:10px" onclick="go('alerts')">
+              🔔 View Actionable Alerts & Dispatch Emergency Relief
+            </button>
+            <button class="top-btn" style="width:100%;justify-content:center;padding:10px" onclick="toggleChat()">
+              🤖 Ask AI Agriculture Assistant
+            </button>
+          </div>
+        </div>
+        <div style="padding-top:1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--muted);display:flex;justify-content:space-between">
+          <span>AI Response Speed: <strong style="color:var(--green-bright)">5.25 Days</strong> (vs 16.2d Manual)</span>
+          <span>Time Cut: <strong style="color:var(--orange-light)">~67%</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="stitle">System Overview & Architecture</h2>
+    <div class="conclusion">
+      <p>This <strong>AI-Based Emergency Resource Allocation System</strong> bridges field IoT sensor telemetry with Machine Learning disaster classification and priority linear optimization. By replacing slow manual damage surveys with real-time bio-climatic analytics, the model automatically detects <strong>Droughts, Floods, Pest Outbreaks, and Crop Fires</strong>, prioritizes regions through weighted severity scoring, and allocates vital resources (Water, Personnel, Heavy Machinery, Funds) to the most vulnerable farming communities.</p>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: CRISIS SIMULATOR (WORKING MODEL FEATURE) ═══ -->
+  <div class="page" id="pg-simulator">
+    <h2 class="stitle">Interactive Emergency & Sensor Simulator</h2>
+    <p style="color:var(--muted);font-size:.82rem;margin-bottom:1.2rem">
+      Adjust the environmental telemetry sliders below to test how the AI model detects emergencies in real-time, calculates the multi-factor severity score, and allocates relief resources.
+    </p>
+
+    <!-- Quick Presets -->
+    <div class="preset-bar">
+      <span style="font-size:.75rem;color:var(--muted);margin-right:6px;align-self:center">⚡ Instant Presets:</span>
+      <button class="preset-btn" onclick="applyPreset('drought')">🌵 Vidarbha Severe Drought</button>
+      <button class="preset-btn" onclick="applyPreset('flood')">🌊 AP Coastal Cyclone Flood</button>
+      <button class="preset-btn" onclick="applyPreset('fire')">🔥 Punjab Stubble Fire Hazard</button>
+      <button class="preset-btn" onclick="applyPreset('pest')">🐛 Jodhpur Locust Influx</button>
+      <button class="preset-btn" onclick="applyPreset('normal')">🌿 Stable Agronomic Conditions</button>
+    </div>
+
+    <div class="sim-grid">
+      <!-- Input Controls -->
+      <div class="card sim-ctrl">
+        <div class="sim-row">
+          <label style="font-size:.78rem;font-weight:700;color:var(--cream)">Select Monitored Region / Target Field</label>
+          <select id="simRegion" style="padding:.65rem;border-radius:8px;background:var(--bg);color:var(--cream);border:1px solid var(--border);font-family:inherit;font-size:.82rem;outline:none" onchange="onSimRegionChange()">
+            <option value="R1 - Vidarbha, Maharashtra">R1 - Vidarbha, Maharashtra (Drought-Prone)</option>
+            <option value="R2 - Coastal Andhra Pradesh">R2 - Coastal Andhra Pradesh (Flood-Prone)</option>
+            <option value="R3 - Jodhpur, Rajasthan">R3 - Jodhpur, Rajasthan (Locust-Prone)</option>
+            <option value="R4 - Ludhiana, Punjab">R4 - Ludhiana, Punjab (Fire-Hazard)</option>
+            <option value="R5 - Bhubaneswar, Odisha">R5 - Bhubaneswar, Odisha (Erratic Weather)</option>
+            <option value="Custom Agricultural District">Custom Agricultural District</option>
+          </select>
+        </div>
+
+        <div class="sim-row">
+          <div class="sim-row-head"><span>🌱 Soil Moisture Deficit / Saturation</span><span id="valMoist">16.0%</span></div>
+          <input type="range" class="sim-slider" id="simMoist" min="5" max="95" step="0.5" value="16" oninput="updateSimVal('Moist','%')"/>
+        </div>
+
+        <div class="sim-row">
+          <div class="sim-row-head"><span>🌡️ Ambient Temperature</span><span id="valTemp">42.0°C</span></div>
+          <input type="range" class="sim-slider" id="simTemp" min="15" max="50" step="0.5" value="42" oninput="updateSimVal('Temp','°C')"/>
+        </div>
+
+        <div class="sim-row">
+          <div class="sim-row-head"><span>💧 Relative Air Humidity</span><span id="valHum">24.0%</span></div>
+          <input type="range" class="sim-slider" id="simHum" min="10" max="98" step="1" value="24" oninput="updateSimVal('Hum','%')"/>
+        </div>
+
+        <div class="sim-row">
+          <div class="sim-row-head"><span>🌧️ Rainfall Accumulation (24h)</span><span id="valRain">0.0 mm</span></div>
+          <input type="range" class="sim-slider" id="simRain" min="0" max="150" step="1" value="0" oninput="updateSimVal('Rain',' mm')"/>
+        </div>
+
+        <div class="sim-row">
+          <div class="sim-row-head"><span>💨 Wind Speed</span><span id="valWind">18.0 km/h</span></div>
+          <input type="range" class="sim-slider" id="simWind" min="2" max="80" step="1" value="18" oninput="updateSimVal('Wind',' km/h')"/>
+        </div>
+
+        <div class="g2" style="margin-bottom:0;margin-top:4px">
+          <div class="sim-row">
+            <div class="sim-row-head"><span>🌾 Affected Area</span><span id="valArea">120 ha</span></div>
+            <input type="range" class="sim-slider" id="simArea" min="10" max="300" step="5" value="120" oninput="updateSimVal('Area',' ha')"/>
+          </div>
+          <div class="sim-row">
+            <div class="sim-row-head"><span>🛡️ Vulnerability Index</span><span id="valVuln">0.88</span></div>
+            <input type="range" class="sim-slider" id="simVuln" min="0.1" max="1.0" step="0.02" value="0.88" oninput="updateSimVal('Vuln','')"/>
+          </div>
+        </div>
+
+        <button class="top-btn top-btn-pri" style="padding:11px;justify-content:center;margin-top:6px" onclick="executeSimulation()">
+          ⚡ Run AI Emergency Detection & Allocation
+        </button>
+      </div>
+
+      <!-- Simulation Output -->
+      <div class="sim-output" id="simOutput">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="font-size:.95rem;color:var(--cream)">AI Analysis & Decision Output</h3>
+          <span id="simStatusTag" class="status-badge status-detected">AI Active</span>
+        </div>
+
+        <div style="background:var(--card);border-radius:10px;padding:1rem;border:1px solid var(--border)">
+          <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase">Detected Primary Classification</div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+            <div id="simDetectedEmergency" style="font-size:1.4rem;font-weight:900;color:var(--orange-light)">Drought</div>
+            <span id="simConfidenceBadge" class="badge b-drought">High Confidence (88%)</span>
+          </div>
+          <div id="simActionText" style="font-size:.78rem;color:var(--cream);margin-top:6px;line-height:1.4">
+            Dispatch water tankers, deploy emergency drip irrigation, distribute drought aid packs.
+          </div>
+        </div>
+
+        <!-- Risk Factors -->
+        <div style="background:var(--card);border-radius:10px;padding:1rem;border:1px solid var(--border)">
+          <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Contributing Environmental Risk Factors</div>
+          <ul id="simRiskFactors" style="font-size:.78rem;color:var(--cream);padding-left:18px;display:flex;flex-direction:column;gap:4px">
+            <li>Critical soil moisture deficit: 16.0% (threshold < 20%)</li>
+            <li>Elevated thermal stress: 42.0°C ambient temperature</li>
+            <li>Prolonged precipitation drought: 0.0 mm recorded</li>
+          </ul>
+        </div>
+
+        <!-- Metrics -->
+        <div class="sim-metric-box">
+          <div class="sm-box">
+            <div class="sm-lbl">Severity Score</div>
+            <div class="sm-val" id="simSevScore" style="color:var(--red)">82.4</div>
+            <div id="simSevLevel" style="font-size:.7rem;color:var(--red);font-weight:700">CRITICAL PRIORITY</div>
+          </div>
+          <div class="sm-box">
+            <div class="sm-lbl">Formula Breakdown</div>
+            <div id="simFormula" style="font-size:.68rem;color:var(--muted);font-family:monospace;margin-top:4px">
+              (0.5×0.88) + (0.3×0.48) + (0.2×0.88) = 82.4/100
+            </div>
+          </div>
+        </div>
+
+        <!-- Dispatch Recommendation -->
+        <div style="background:var(--card);border-radius:10px;padding:1rem;border:1px solid var(--border)">
+          <div style="font-size:.72rem;color:var(--orange-light);font-weight:700;text-transform:uppercase;margin-bottom:6px">
+            Optimized Immediate Dispatch Recommendation
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center" id="simDispatchBox">
+            <div style="background:rgba(0,0,0,.2);padding:6px;border-radius:6px"><div style="font-size:.65rem;color:var(--muted)">WATER</div><strong style="color:#70c8ff" id="simDispWater">206 KL</strong></div>
+            <div style="background:rgba(0,0,0,.2);padding:6px;border-radius:6px"><div style="font-size:.65rem;color:var(--muted)">PERSONNEL</div><strong style="color:var(--cream)" id="simDispPers">33</strong></div>
+            <div style="background:rgba(0,0,0,.2);padding:6px;border-radius:6px"><div style="font-size:.65rem;color:var(--muted)">MACHINERY</div><strong style="color:#ffa040" id="simDispMach">8 Units</strong></div>
+            <div style="background:rgba(0,0,0,.2);padding:6px;border-radius:6px"><div style="font-size:.65rem;color:var(--muted)">FUNDS</div><strong style="color:#32e078" id="simDispFunds">₹12,360</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: MAP ═══ -->
+  <div class="page" id="pg-map">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <h2 class="stitle" style="margin-bottom:0">Real-Time Geospatial Emergency Map — India</h2>
+      <button class="top-btn" onclick="refreshMapMarkers()">🔄 Sync Map Telemetry</button>
+    </div>
+    <div id="mapBox"></div>
+    <p style="color:var(--muted);font-size:.78rem">
+      Interactive markers monitor 5 active agricultural belts. Color denotes crisis severity (Red: Critical ≥70, Orange: High ≥45, Green: Normal). Click any marker to view sensor readings and resource dispatch status.
+    </p>
+  </div>
+
+  <!-- ═══ PAGE: PIPELINE ═══ -->
+  <div class="page" id="pg-pipeline">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <h2 class="stitle" style="margin-bottom:0">Automated AI Pipeline Execution</h2>
+      <button class="top-btn top-btn-pri" onclick="runPipeline()">⚡ Re-Run Pipeline</button>
+    </div>
+    <div id="pipEmpty" style="padding:2rem;text-align:center;background:var(--card);border-radius:var(--r);border:1px solid var(--border)">
+      <p style="color:var(--muted)">Click <strong style="color:var(--orange)">Run AI Pipeline</strong> to ingest live sensor readings and optimize resource distribution.</p>
+    </div>
+    <div id="pipResults" style="display:none">
+      <div style="margin-bottom:1rem;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="font-size:.75rem;color:var(--muted)">Run Execution ID:</span>
+        <span id="runIdLbl" style="font-family:monospace;font-size:.85rem;color:var(--orange-light);font-weight:700"></span>
+        <span id="runTimeLbl" style="font-size:.72rem;color:var(--muted)"></span>
+        <span id="runBackendLbl" class="db-badge" style="font-size:.65rem">MongoDB Backend</span>
+      </div>
+
+      <h3 class="stitle" style="font-size:1rem">1. AI Emergency Detection & Severity Scoring</h3>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Monitored Region</th>
+              <th>AI Detected Emergency</th>
+              <th>Confidence</th>
+              <th>Telemetry Snapshot</th>
+              <th>Severity Score</th>
+            </tr>
+          </thead>
+          <tbody id="sevTb"></tbody>
+        </table>
+      </div>
+
+      <h3 class="stitle" style="font-size:1rem">2. Optimized Resource Allocation (Linear Programming)</h3>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr>
+              <th>Target Region</th>
+              <th>💧 Emergency Water</th>
+              <th>👥 Relief Personnel</th>
+              <th>🚜 Specialized Machinery</th>
+              <th>💰 Emergency Relief Funds</th>
+            </tr>
+          </thead>
+          <tbody id="allocTb"></tbody>
+        </table>
+      </div>
+
+      <div class="g2">
+        <div class="cbox">
+          <h3 class="stitle" style="font-size:.92rem">Response Time Impact: Traditional vs AI</h3>
+          <canvas id="impactChart"></canvas>
+        </div>
+        <div class="cbox">
+          <h3 class="stitle" style="font-size:.92rem">Regional Severity Weight Distribution</h3>
+          <canvas id="sevChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: ACTIONABLE ALERTS ═══ -->
+  <div class="page" id="pg-alerts">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:10px">
+      <h2 class="stitle" style="margin-bottom:0">Emergency Alerts & Resource Dispatch Operations</h2>
+      <div style="display:flex;gap:8px">
+        <button class="top-btn" onclick="filterAlerts('all')">All</button>
+        <button class="top-btn" onclick="filterAlerts('active')">Active Only</button>
+        <button class="top-btn" onclick="filterAlerts('dispatched')">Dispatched</button>
+        <button class="top-btn" onclick="filterAlerts('resolved')">Resolved</button>
+        <button class="top-btn" onclick="loadAlerts()">🔄 Refresh</button>
+      </div>
+    </div>
+    <div id="alertList">
+      <div style="color:var(--muted);padding:2rem;text-align:center">Loading live alerts...</div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: IOT SENSORS ═══ -->
+  <div class="page" id="pg-iot">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 class="stitle" style="margin-bottom:2px">Live IoT Field Sensor Telemetry</h2>
+        <p style="color:var(--muted);font-size:.78rem">Simulated real-time sensor streams across 5 monitored agricultural belts.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <label style="font-size:.75rem;color:var(--muted);display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()"/> Auto-Refresh (30s)
+        </label>
+        <button class="top-btn" onclick="fetchIoT()">📡 Refresh Now</button>
+      </div>
+    </div>
+    <div class="iot-g" id="iotGrid"></div>
+  </div>
+
+  <!-- ═══ PAGE: WEATHER ═══ -->
+  <div class="page" id="pg-weather">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <h2 class="stitle" style="margin-bottom:0">Agricultural Weather Telemetry</h2>
+      <button class="top-btn" onclick="fetchWeather()">🌤️ Refresh Weather</button>
+    </div>
+    <div class="iot-g" id="weatherGrid"></div>
+  </div>
+
+  <!-- ═══ PAGE: CALCULATOR ═══ -->
+  <div class="page" id="pg-calculator">
+    <h2 class="stitle">Multi-Factor Severity Score Calculator</h2>
+    <div class="card" style="margin-bottom:1.5rem">
+      <p style="color:var(--muted);font-size:.82rem;margin-bottom:1.2rem">
+        Validate mathematical severity scoring using the standard equation:
+        <strong style="color:var(--orange-light)">Severity = (0.50 × ML Probability) + (0.30 × Area / 250) + (0.20 × Vulnerability) × 100</strong>
+      </p>
+      <div class="g3" style="margin-bottom:1rem">
+        <div>
+          <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">ML Disaster Probability (0.0 to 1.0)</label>
+          <input type="number" id="calcProb" value="0.75" min="0" max="1" step="0.01" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--cream);font-family:inherit"/>
+        </div>
+        <div>
+          <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">Affected Agricultural Area (Hectares)</label>
+          <input type="number" id="calcArea" value="120" min="0" max="500" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--cream);font-family:inherit"/>
+        </div>
+        <div>
+          <label style="font-size:.75rem;color:var(--muted);display:block;margin-bottom:4px">Socio-Economic Vulnerability Index (0.0 to 1.0)</label>
+          <input type="number" id="calcVuln" value="0.70" min="0" max="1" step="0.01" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--cream);font-family:inherit"/>
+        </div>
+      </div>
+      <button class="top-btn top-btn-pri" style="margin-bottom:1rem" onclick="calcSeverity()">🔢 Compute Score</button>
+      <div class="card" style="background:var(--bg2);text-align:center;padding:1.4rem" id="calcResult">
+        <div style="font-size:2.6rem;font-weight:900;color:var(--orange-light)">—</div>
+        <p style="color:var(--muted);font-size:.78rem;margin-top:.4rem">Click Compute Score to evaluate</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: HISTORY ═══ -->
+  <div class="page" id="pg-history">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <h2 class="stitle" style="margin-bottom:0">Historical Pipeline Runs & Database Archive</h2>
+      <button class="top-btn" onclick="loadHistory()">📁 Refresh Runs</button>
+    </div>
+    <div id="histList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem"></div>
+    <div id="histEmpty" style="color:var(--muted);padding:2rem;text-align:center">Loading history...</div>
+  </div>
+
+  <!-- ═══ PAGE: TECH ARCHITECTURE ═══ -->
+  <div class="page" id="pg-tech">
+    <h2 class="stitle">System Architecture & Tech Stack</h2>
+    <div class="g3">
+      <div class="card"><div style="font-size:1.8rem;margin-bottom:.4rem">🧠</div><h4 style="color:var(--orange-light)">AI & ML Engine</h4><p style="font-size:.76rem;color:var(--muted);line-height:1.5;margin-top:4px">Multi-factor decision models evaluate soil moisture, heat indices, precipitation accumulation, and wind gusts to classify agricultural emergencies.</p></div>
+      <div class="card"><div style="font-size:1.8rem;margin-bottom:.4rem">🗄️</div><h4 style="color:var(--orange-light)">Dual Database Layer</h4><p style="font-size:.76rem;color:var(--muted);line-height:1.5;margin-top:4px">Resilient storage with active MongoDB document collections and automatic zero-latency fallback to SQLite (agriculture.db) for maximum availability.</p></div>
+      <div class="card"><div style="font-size:1.8rem;margin-bottom:.4rem">📐</div><h4 style="color:var(--orange-light)">Linear Optimization</h4><p style="font-size:.76rem;color:var(--muted);line-height:1.5;margin-top:4px">Priority-weighted allocation distributes finite relief supplies (water tankers, rescue teams, machinery, and funds) according to crisis urgency.</p></div>
+      <div class="card"><div style="font-size:1.8rem;margin-bottom:.4rem">🗺️</div><h4 style="color:var(--orange-light)">Leaflet.js Geospatial GIS</h4><p style="font-size:.76rem;color:var(--muted);line-height:1.5;margin-top:4px">Interactive map visualization displaying geographical coordinates, radius sizing based on severity scores, and real-time sensor popups.</p></div>
+      <div class="card"><div style="font-size:1.8rem;margin-bottom:.4rem">🎙️</div><h4 style="color:var(--orange-light)">Speech & AI Assistant</h4><p style="font-size:.76rem;color:var(--muted);line-height:1.5;margin-top:4px">Voice synthesis and speech recognition powered by Web Speech API, with context-aware intelligence on live disaster state.</p></div>
+      <div class="card"><div style="font-size:1.8rem;margin-bottom:.4rem">⚡</div><h4 style="color:var(--orange-light)">Action Operations Center</h4><p style="font-size:.76rem;color:var(--muted);line-height:1.5;margin-top:4px">Lifecycle management of emergency incidents: Automated Detection → Resource Mobilization (Dispatched) → Disaster Containment (Resolved).</p></div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: ABOUT ═══ -->
+  <div class="page" id="pg-about">
+    <h2 class="stitle">Project Information & Working Model Summary</h2>
+    <div class="conclusion">
+      <p>This project was developed by <strong>Dhanush</strong> (Department of Computer Science & Engineering) to demonstrate the transformative impact of AI, IoT, and Operations Research on agricultural disaster management. By continuously processing telemetry and applying mathematical optimization, relief efforts can reach disaster-stricken farming belts up to <strong>67% faster</strong> than legacy bureaucratic procedures.</p>
+    </div>
+    <div style="text-align:center;padding:2.5rem 0">
+      <div style="font-size:2rem;margin-bottom:.5rem">🌾</div>
+      <h3 style="font-size:1.4rem;color:var(--cream)">AI in Agriculture: Emergency Resource Allocation</h3>
+      <p style="color:var(--muted);margin-top:.4rem;font-size:.85rem">Department of Computer Science and Engineering</p>
+      <div style="margin-top:1.5rem">
+        <a href="/owner-panel-8x9k2" target="_blank" class="top-btn" style="display:inline-flex;text-decoration:none">🔐 Open Owner Database Panel</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CHATBOT ═══ -->
+<button class="chat-toggle" id="chatToggle" onclick="toggleChat()" title="Open AI Agriculture Assistant">🤖</button>
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-header">
+    <h3>🤖 AI Agriculture Assistant</h3>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-chips">
+    <div class="chip" onclick="quickAsk('What is the current status?')">📊 System Status</div>
+    <div class="chip" onclick="quickAsk('Which region has the highest severity?')">🔥 Highest Severity</div>
+    <div class="chip" onclick="quickAsk('How is drought detected?')">🌵 Drought Criteria</div>
+    <div class="chip" onclick="quickAsk('Explain the severity score formula')">📐 Scoring Formula</div>
+    <div class="chip" onclick="quickAsk('How many active alerts right now?')">🚨 Active Alerts</div>
+  </div>
+  <div class="chat-body" id="chatBody">
+    <div class="chat-msg chat-bot">
+      Hello! 👋 I'm the AI Agriculture Assistant. I'm connected to the live system state. You can ask me about regional crises, sensor thresholds, active alerts, or click the 🎤 button to talk!
+    </div>
+  </div>
+  <div class="chat-input-wrap">
+    <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()" title="Speak with microphone">🎤</button>
+    <input class="chat-input" id="chatInput" placeholder="Ask about crises, sensors, or status..." onkeydown="if(event.key==='Enter')sendChat()"/>
+    <button class="chat-send" onclick="sendChat()">Send</button>
+  </div>
+</div>
+
+<!-- ═══ HISTORY DETAIL MODAL ═══ -->
+<div class="modal-bg" id="histModal">
+  <div class="modal">
+    <button class="modal-x" onclick="closeModal()">✕</button>
+    <h3 class="stitle" id="modalTitle">Run Details</h3>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ═══ TOAST CONTAINER ═══ -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ═══ NAVIGATION ═══
+const PAGES=['home','simulator','map','pipeline','alerts','iot','weather','calculator','history','tech','about'];
+const TITLES={
+  'home':'Operations Dashboard',
+  'simulator':'Crisis & Sensor Simulator',
+  'map':'Live Geospatial Map',
+  'pipeline':'AI Disaster Pipeline',
+  'alerts':'Emergency Alerts & Dispatch',
+  'iot':'IoT Sensor Telemetry',
+  'weather':'Live Agricultural Weather',
+  'calculator':'Severity Calculator',
+  'history':'Database History',
+  'tech':'Architecture & Stack',
+  'about':'About Project'
+};
+
+let currentTab='home';
+let cachedSeverity=[];
+let activeAlertsCache=[];
+
+function go(p){
+  currentTab=p;
+  PAGES.forEach(n=>{
+    const el=document.getElementById('pg-'+n);
+    if(el)el.classList.toggle('active',n===p);
+  });
+  document.querySelectorAll('.nav-item').forEach((b,i)=>b.classList.toggle('active',PAGES[i]===p));
+  document.getElementById('pageTitle').textContent=TITLES[p]||p;
+
+  // Leaflet sizing fix: always invalidate size after tab switch
+  setTimeout(()=>{
+    if(p==='map'){
+      if(!window._mapReady)initMap();
+      else if(map)map.invalidateSize();
+    }
+    if(p==='home'){
+      if(!window._miniReady)initMiniMap();
+      else if(miniMap)miniMap.invalidateSize();
+    }
+  },120);
+
+  if(p==='history')loadHistory();
+  if(p==='alerts')loadAlerts();
+  if(p==='iot')fetchIoT();
+  if(p==='weather')fetchWeather();
+}
+
+// ═══ CLOCK ═══
+setInterval(()=>{
+  const el=document.getElementById('clock');
+  if(el)el.textContent=new Date().toLocaleTimeString();
+},1000);
+
+// ═══ TOAST NOTIFICATIONS ═══
+function toast(msg,type='info'){
+  const c=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  t.innerHTML=msg;
+  c.appendChild(t);
+  setTimeout(()=>{
+    t.style.opacity='0';
+    t.style.transform='translateX(40px)';
+    setTimeout(()=>t.remove(),300);
+  },4200);
+}
+
+// ═══ SYSTEM STATUS & BACKEND INDICATOR ═══
+async function fetchSystemStatus(){
+  try{
+    const res=await fetch('/api/system_status');
+    const d=await res.json();
+    const ind=document.getElementById('dbText');
+    if(ind){
+      ind.textContent=`Database: ${d.database.engine} (Live)`;
+    }
+    document.getElementById('alertCount').textContent=d.active_alerts||0;
+  }catch(e){
+    console.error('System status error:',e);
+  }
+}
+
+// ═══ HOME STATS ═══
+function renderStats(){
+  document.getElementById('homeStats').innerHTML=[
+    ['🌍','Monitored Belts','5 Active'],
+    ['🧠','AI Detection','Multi-Sensor ML'],
+    ['⚡','Response Time','5.25 Days'],
+    ['💧','Emergency Water','1,000 KL'],
+    ['🚜','Heavy Machinery','40 Units']
+  ].map(s=>`
+    <div class="statc">
+      <div class="si">${s[0]}</div>
+      <div>
+        <div class="sl">${s[1]}</div>
+        <div class="sv">${s[2]}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══ LEAFLET MAPS ═══
+let map, miniMap;
+let mainMarkers=[], miniMarkers=[];
+
+function initMap(){
+  map=L.map('mapBox').setView([22.5,79],5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(map);
+  loadMarkers(map,mainMarkers);
+  window._mapReady=true;
+  setTimeout(()=>{ if(map)map.invalidateSize(); },150);
+}
+
+function initMiniMap(){
+  miniMap=L.map('miniMap').setView([22.5,79],4.5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:18}).addTo(miniMap);
+  loadMarkers(miniMap,miniMarkers);
+  window._miniReady=true;
+  setTimeout(()=>{ if(miniMap)miniMap.invalidateSize(); },150);
+}
+
+function loadMarkers(m,storageArray){
+  fetch('/api/regions').then(r=>r.json()).then(data=>{
+    data.forEach(r=>{
+      const c='#e85800';
+      const mk=L.circleMarker([r.lat,r.lng],{
+        radius:10,
+        fillColor:c,
+        color:'#fff',
+        weight:2,
+        fillOpacity:.85
+      }).addTo(m)
+      .bindPopup(`
+        <div style="font-family:'Inter',sans-serif;font-size:12px;min-width:180px">
+          <strong style="color:#112219">${r.id} — ${r.name}</strong><br/>
+          <span style="color:#888">${r.profile}</span><br/>
+          <div style="margin-top:6px;padding:4px 8px;background:#f0ede5;border-radius:6px;font-weight:700;color:#e85800">
+            Click 'Run Pipeline' to analyze
+          </div>
+        </div>
+      `);
+      storageArray.push({marker:mk,region:r});
+    });
+    if(cachedSeverity.length)updateMapMarkers(cachedSeverity);
+  });
+}
+
+function updateMapMarkers(sev){
+  cachedSeverity=sev;
+  const colorMap={'Drought':'#e85800','Flood':'#0077dd','Pest Outbreak':'#55aa00','Fire':'#dd1100','Normal (Low Risk)':'#2a8850'};
+
+  [mainMarkers,miniMarkers].forEach(list=>{
+    sev.forEach(s=>{
+      const f=list.find(m=>s.region_id.includes(m.region.id));
+      if(!f)return;
+      const sc=s.severity_score;
+      const col=sc>=70?'#ff3d4d':sc>=45?'#e85800':'#32e078';
+      const radius=Math.max(9,Math.min(22,8+sc/5));
+
+      f.marker.setStyle({radius:radius,fillColor:col,color:'#fff',weight:2,fillOpacity:.88});
+      f.marker.setPopupContent(`
+        <div style="font-family:'Inter',sans-serif;font-size:12px;min-width:210px;line-height:1.4">
+          <strong style="font-size:13px;color:#0b1510">${s.region_id}</strong><br/>
+          <div style="display:inline-block;padding:2px 7px;border-radius:10px;background:${col};color:#fff;font-weight:700;font-size:11px;margin:4px 0">
+            ${s.predicted_emergency} — Score: ${sc}
+          </div>
+          <div style="color:#555;font-size:11px">Confidence: ${(s.probability*100).toFixed(0)}% (${s.confidence})</div>
+          <div style="margin-top:5px;font-size:11px;color:#333;background:#f4f1eb;padding:5px 7px;border-radius:6px">
+            🌱 Soil: ${s.sensors.soil_moisture}% &nbsp;|&nbsp; 🌡️ ${s.sensors.temperature}°C<br/>
+            🌧️ Rain: ${s.sensors.rainfall_mm} mm &nbsp;|&nbsp; 💨 ${s.sensors.wind_speed_kmh} km/h
+          </div>
+        </div>
+      `);
+    });
+  });
+}
+
+function refreshMapMarkers(){
+  toast('🔄 Syncing live GIS markers...','info');
+  if(cachedSeverity.length){
+    updateMapMarkers(cachedSeverity);
+    toast('✅ Map markers synchronized','success');
+  }else{
+    runPipeline();
+  }
+}
+
+// ═══ BADGES & HELPERS ═══
+function badge(t){
+  const map={'Drought':'b-drought','Flood':'b-flood','Pest Outbreak':'b-pest','Fire':'b-fire','Normal (Low Risk)':'b-normal'};
+  return `<span class="badge ${map[t]||'b-drought'}">${t}</span>`;
+}
+
+function sevBar(s){
+  const col=s>=70?'#ff3d4d':s>=45?'#ffa114':'#32e078';
+  return `
+    <div style="display:flex;align-items:center;gap:8px">
+      <strong style="color:${col};min-width:35px">${s}</strong>
+      <div class="sbar" style="flex:1"><div class="sfill" style="width:${Math.min(100,s)}%;background:${col}"></div></div>
+    </div>
+  `;
+}
+
+// ═══ PIPELINE EXECUTION ═══
+async function runPipeline(){
+  toast('⚡ Ingesting IoT sensor streams & executing ML classifier...','info');
+  go('pipeline');
+  try{
+    const res=await fetch('/api/run_demo');
+    const d=await res.json();
+    cachedSeverity=d.severity;
+
+    document.getElementById('pipEmpty').style.display='none';
+    document.getElementById('pipResults').style.display='';
+    document.getElementById('runIdLbl').textContent=d.run_id;
+    document.getElementById('runTimeLbl').textContent=new Date(d.timestamp).toLocaleString();
+    document.getElementById('runBackendLbl').textContent=d.database_backend+' Backend Active';
+
+    // Severity Table
+    document.getElementById('sevTb').innerHTML=d.severity.map((r,i)=>`
+      <tr>
+        <td style="color:var(--muted)">${i+1}</td>
+        <td><strong>${r.region_id}</strong></td>
+        <td>${badge(r.predicted_emergency)}</td>
+        <td>${(r.probability*100).toFixed(0)}% <span style="font-size:.7rem;color:var(--muted)">(${r.confidence})</span></td>
+        <td style="font-size:.75rem;color:var(--muted)">
+          🌱 ${r.sensors.soil_moisture}% &nbsp; 🌡️ ${r.sensors.temperature}°C &nbsp; 🌧️ ${r.sensors.rainfall_mm}mm
+        </td>
+        <td>${sevBar(r.severity_score)}</td>
+      </tr>
+    `).join('');
+
+    // Allocation Table
+    document.getElementById('allocTb').innerHTML=d.allocation.map(r=>`
+      <tr>
+        <td><strong>${r.region_id}</strong></td>
+        <td><span style="color:#85ccff;font-weight:700">${r.water} KL</span></td>
+        <td>${r.personnel} Specialists</td>
+        <td>${r.machinery} Units</td>
+        <td><strong style="color:#32e078">₹${r.funds.toLocaleString()}</strong></td>
+      </tr>
+    `).join('');
+
+    // Charts & Map
+    renderImpact(d.impact);
+    renderSev(d.severity);
+    updateMapMarkers(d.severity);
+
+    toast(`✅ AI Pipeline Run ${d.run_id} completed successfully!`,'success');
+    speak(`AI pipeline completed. Peak emergency detected in ${d.severity[0].region_id} with a severity score of ${d.severity[0].severity_score}`);
+    fetchSystemStatus();
+    loadAlerts();
+  }catch(e){
+    toast('❌ Pipeline error: '+e.message,'critical');
+  }
+}
+
+// ═══ CRISIS SIMULATOR LOGIC ═══
+function updateSimVal(id,unit){
+  const val=document.getElementById('sim'+id).value;
+  document.getElementById('val'+id).textContent=val+unit;
+}
+
+const REGION_PRESETS={
+  'drought':{moist:14,temp:43,hum:22,rain:0,wind:20,area:140,vuln:0.9,reg:'R1 - Vidarbha, Maharashtra'},
+  'flood':{moist:85,temp:29,hum:92,rain:110,wind:42,area:100,vuln:0.75,reg:'R2 - Coastal Andhra Pradesh'},
+  'fire':{moist:30,temp:45,hum:18,rain:0,wind:35,area:190,vuln:0.85,reg:'R4 - Ludhiana, Punjab'},
+  'pest':{moist:50,temp:31,hum:82,rain:12,wind:18,area:70,vuln:0.68,reg:'R3 - Jodhpur, Rajasthan'},
+  'normal':{moist:45,temp:28,hum:55,rain:20,wind:12,area:80,vuln:0.5,reg:'R5 - Bhubaneswar, Odisha'}
+};
+
+function applyPreset(key){
+  const p=REGION_PRESETS[key];
+  if(!p)return;
+  document.getElementById('simMoist').value=p.moist;
+  document.getElementById('simTemp').value=p.temp;
+  document.getElementById('simHum').value=p.hum;
+  document.getElementById('simRain').value=p.rain;
+  document.getElementById('simWind').value=p.wind;
+  document.getElementById('simArea').value=p.area;
+  document.getElementById('simVuln').value=p.vuln;
+  document.getElementById('simRegion').value=p.reg;
+
+  updateSimVal('Moist','%');
+  updateSimVal('Temp','°C');
+  updateSimVal('Hum','%');
+  updateSimVal('Rain',' mm');
+  updateSimVal('Wind',' km/h');
+  updateSimVal('Area',' ha');
+  updateSimVal('Vuln','');
+
+  toast(`Applied preset: ${key.toUpperCase()}`,'info');
+  executeSimulation();
+}
+
+function onSimRegionChange(){
+  const reg=document.getElementById('simRegion').value;
+  if(reg.includes('Vidarbha'))applyPreset('drought');
+  else if(reg.includes('Andhra'))applyPreset('flood');
+  else if(reg.includes('Ludhiana'))applyPreset('fire');
+  else if(reg.includes('Jodhpur'))applyPreset('pest');
+}
+
+async function executeSimulation(){
+  const payload={
+    region_name:document.getElementById('simRegion').value,
+    soil_moisture:parseFloat(document.getElementById('simMoist').value),
+    temperature:parseFloat(document.getElementById('simTemp').value),
+    humidity:parseFloat(document.getElementById('simHum').value),
+    rainfall_mm:parseFloat(document.getElementById('simRain').value),
+    wind_speed_kmh:parseFloat(document.getElementById('simWind').value),
+    area_ha:parseFloat(document.getElementById('simArea').value),
+    vulnerability:parseFloat(document.getElementById('simVuln').value)
+  };
+
+  try{
+    const res=await fetch('/api/simulate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    const d=await res.json();
+
+    document.getElementById('simDetectedEmergency').textContent=d.ml_detection.emergency;
+    const badgeEl=document.getElementById('simConfidenceBadge');
+    badgeEl.textContent=`${d.ml_detection.confidence} Confidence (${(d.ml_detection.probability*100).toFixed(0)}%)`;
+    badgeEl.className=`badge ${badge(d.ml_detection.emergency).match(/class="badge (.*?)"/)[1]}`;
+
+    document.getElementById('simActionText').textContent=d.ml_detection.recommended_action;
+
+    // Risk factors
+    const rfList=document.getElementById('simRiskFactors');
+    rfList.innerHTML=d.ml_detection.risk_factors.map(r=>`<li>${r}</li>`).join('') || '<li>Environmental variables within safe margins.</li>';
+
+    // Severity
+    const score=d.severity.score;
+    const scEl=document.getElementById('simSevScore');
+    scEl.textContent=score;
+    const col=score>=70?'var(--red)':score>=45?'var(--amber)':'var(--green-bright)';
+    scEl.style.color=col;
+
+    const lvlEl=document.getElementById('simSevLevel');
+    lvlEl.textContent=`${d.severity.level} PRIORITY`;
+    lvlEl.style.color=col;
+
+    document.getElementById('simFormula').textContent=d.severity.formula_breakdown;
+
+    // Dispatch
+    document.getElementById('simDispWater').textContent=`${d.suggested_dispatch.water_kl} KL`;
+    document.getElementById('simDispPers').textContent=d.suggested_dispatch.personnel;
+    document.getElementById('simDispMach').textContent=`${d.suggested_dispatch.machinery_units} Units`;
+    document.getElementById('simDispFunds').textContent=`₹${d.suggested_dispatch.funds_inr.toLocaleString()}`;
+
+    toast(`⚡ AI Detection: ${d.ml_detection.emergency} (Severity: ${score})`,'info');
+    speak(`Simulation evaluated. Detected ${d.ml_detection.emergency} with severity score ${score}`);
+  }catch(e){
+    toast('Simulation error: '+e.message,'critical');
+  }
+}
+
+// ═══ ACTIONABLE ALERTS & WORKFLOW ═══
+let currentAlertFilter='all';
+
+async function loadAlerts(){
+  const al=document.getElementById('alertList');
+  al.innerHTML='<div style="color:var(--muted);padding:2rem;text-align:center"><span class="spin"></span> Fetching live emergency alerts...</div>';
+  try{
+    const res=await fetch('/api/alerts');
+    const data=await res.json();
+    activeAlertsCache=data;
+    renderAlerts();
+    document.getElementById('alertCount').textContent=data.filter(a=>a.status!=='resolved').length;
+  }catch(e){
+    al.innerHTML=`<div style="color:var(--red);padding:2rem;text-align:center">Error loading alerts: ${e.message}</div>`;
+  }
+}
+
+function filterAlerts(f){
+  currentAlertFilter=f;
+  renderAlerts();
+}
+
+function renderAlerts(){
+  const al=document.getElementById('alertList');
+  let list=activeAlertsCache;
+  if(currentAlertFilter==='active')list=list.filter(a=>a.status==='detected');
+  else if(currentAlertFilter==='dispatched')list=list.filter(a=>a.status==='dispatched');
+  else if(currentAlertFilter==='resolved')list=list.filter(a=>a.status==='resolved');
+
+  if(!list.length){
+    al.innerHTML=`<div style="color:var(--muted);padding:3rem;text-align:center;background:var(--card);border-radius:var(--r)">No alerts found matching '${currentAlertFilter}'.</div>`;
+    return;
+  }
+
+  al.innerHTML=list.map(a=>{
+    const col=a.level==='critical'?'var(--red)':a.level==='warning'?'var(--amber)':'var(--blue)';
+    const statusClass=a.status==='resolved'?'status-resolved':a.status==='dispatched'?'status-dispatched':'status-detected';
+    const statusText=a.status==='resolved'?'✅ RESOLVED':a.status==='dispatched'?'🚛 DISPATCHED':'🚨 DETECTED';
+
+    return `
+      <div class="card" style="margin-bottom:1rem;border-left:5px solid ${col}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span class="status-badge ${statusClass}">${statusText}</span>
+              <strong style="font-size:.95rem">${a.region}</strong>
+              ${badge(a.type)}
+              <span style="font-weight:700;color:${col}">Score: ${a.severity}</span>
+            </div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:6px">
+              Incident ID: <code style="color:var(--orange-light)">${a.id||a.run_id}</code> &nbsp;•&nbsp; 
+              Logged: ${new Date(a.time).toLocaleString()}
+            </div>
+            ${a.notes?`<div style="font-size:.76rem;color:var(--cream);margin-top:5px;background:rgba(0,0,0,.2);padding:4px 8px;border-radius:6px">📝 ${a.notes}</div>`:''}
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center">
+            ${a.status!=='dispatched'&&a.status!=='resolved'?`
+              <button class="top-btn top-btn-pri" style="font-size:.72rem" onclick="actionAlert('${a.id}','dispatch')">
+                ⚡ Dispatch Relief
+              </button>
+            `:''}
+            ${a.status!=='resolved'?`
+              <button class="top-btn" style="font-size:.72rem;color:var(--green-bright);border-color:rgba(50,224,120,.3)" onclick="actionAlert('${a.id}','resolve')">
+                ✅ Mark Resolved
+              </button>
+            `:`
+              <span style="font-size:.72rem;color:var(--green-bright);font-weight:700">Contained</span>
+            `}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function actionAlert(id,act){
+  toast(`Submitting ${act} action...`,'info');
+  try{
+    const res=await fetch(`/api/alerts/${id}/action`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:act})
+    });
+    const d=await res.json();
+    if(d.success){
+      toast(`✅ Alert ${act === 'dispatch' ? 'Dispatched' : 'Resolved'} successfully`,'success');
+      loadAlerts();
+      fetchSystemStatus();
+    }else{
+      toast('Could not update alert status','warning');
+    }
+  }catch(e){
+    toast('Action error: '+e.message,'critical');
+  }
+}
+
+// ═══ IOT SENSORS ═══
+let autoRefreshTimer=null;
+
+async function fetchIoT(){
+  const g=document.getElementById('iotGrid');
+  if(!g)return;
+  g.innerHTML='<div style="padding:2rem;color:var(--muted);text-align:center;grid-column:1/-1"><span class="spin"></span> Polling field sensors...</div>';
+  try{
+    const res=await fetch('/api/iot_data');
+    const data=await res.json();
+    g.innerHTML=data.map(s=>`
+      <div class="iotc">
+        <h4><span>${s.region}</span></h4>
+        <div class="iotr"><span>🌱 Soil Moisture</span><span class="iotv">${s.soil_moisture}%</span></div>
+        <div class="iotr"><span>🌡️ Temperature</span><span class="iotv">${s.temperature}°C</span></div>
+        <div class="iotr"><span>💧 Relative Humidity</span><span class="iotv">${s.humidity}%</span></div>
+        <div class="iotr"><span>🌧️ Rainfall Accumulation</span><span class="iotv">${s.rainfall_mm} mm</span></div>
+        <div class="iotr"><span>💨 Wind Velocity</span><span class="iotv">${s.wind_speed_kmh} km/h</span></div>
+      </div>
+    `).join('');
+    toast('📡 Live field sensor telemetry refreshed','success');
+  }catch(e){
+    g.innerHTML=`<div style="color:var(--red);padding:1rem;grid-column:1/-1">${e.message}</div>`;
+  }
+}
+
+function toggleAutoRefresh(){
+  if(document.getElementById('autoRefresh').checked){
+    autoRefreshTimer=setInterval(fetchIoT,30000);
+    toast('🔄 30s auto-refresh enabled','info');
+  }else{
+    clearInterval(autoRefreshTimer);
+    toast('Auto-refresh disabled','info');
+  }
+}
+
+// ═══ WEATHER ═══
+async function fetchWeather(){
+  const g=document.getElementById('weatherGrid');
+  if(!g)return;
+  g.innerHTML='<div style="padding:2rem;color:var(--muted);text-align:center;grid-column:1/-1"><span class="spin"></span> Ingesting weather data...</div>';
+  try{
+    const res=await fetch('/api/weather');
+    const data=await res.json();
+    const icons={'Sunny & Arid':'☀️','Heavy Rain / Storm':'⛈️','Warm & Dusty':'🌾','Extreme Heat & Haze':'🔥','Overcast & Humid':'☁️'};
+
+    g.innerHTML=data.map(w=>`
+      <div class="wcard">
+        <div class="wicon">${icons[w.condition]||'🌤️'}</div>
+        <h4>${w.region}</h4>
+        <div class="wtemp">${w.temp_c}°C</div>
+        <div style="font-size:.78rem;color:var(--cream);margin:.3rem 0;font-weight:600">${w.condition}</div>
+        <div class="wdetail">
+          💧 Humidity: ${w.humidity}% &nbsp;•&nbsp; 💨 Wind: ${w.wind_kmh} km/h<br/>
+          ☀️ UV Index: ${w.uv_index} &nbsp;•&nbsp; 🌧️ Rain Chance: ${w.rain_chance}%
+        </div>
+      </div>
+    `).join('');
+    toast('🌤️ Weather forecasts loaded','success');
+  }catch(e){
+    g.innerHTML=`<div style="color:var(--red);grid-column:1/-1">${e.message}</div>`;
+  }
+}
+
+// ═══ CALCULATOR ═══
+async function calcSeverity(){
+  const prob=parseFloat(document.getElementById('calcProb').value)||0;
+  const area=parseFloat(document.getElementById('calcArea').value)||0;
+  const vuln=parseFloat(document.getElementById('calcVuln').value)||0;
+  try{
+    const res=await fetch('/api/calculate_severity',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({probability:prob,area:area,vulnerability:vuln})
+    });
+    const d=await res.json();
+    const col=d.severity_score>=70?'var(--red)':d.severity_score>=45?'var(--amber)':'var(--green-bright)';
+
+    document.getElementById('calcResult').innerHTML=`
+      <div style="font-size:2.8rem;font-weight:900;color:${col}">${d.severity_score}</div>
+      <p style="color:${col};font-weight:700;font-size:.9rem;margin-top:.3rem">${d.level} SEVERITY PRIORITY</p>
+      <p style="color:var(--muted);font-size:.75rem;margin-top:.4rem">
+        (0.50 × ${prob}) + (0.30 × ${round(area/250,2)}) + (0.20 × ${vuln}) × 100
+      </p>
+    `;
+    speak(`Computed severity score is ${d.severity_score}. Level: ${d.level}`);
+  }catch(e){
+    toast('Calculation error: '+e.message,'critical');
+  }
+}
+
+function round(val,dec){ return Number(Math.round(val+'e'+dec)+'e-'+dec); }
+
+// ═══ HISTORY ═══
+async function loadHistory(){
+  const list=document.getElementById('histList'),emp=document.getElementById('histEmpty');
+  try{
+    const res=await fetch('/api/history');
+    const runs=await res.json();
+    if(!runs.length){
+      emp.textContent='No runs recorded yet. Execute the AI pipeline first.';
+      return;
+    }
+    emp.style.display='none';
+    list.innerHTML=runs.map(r=>`
+      <div class="card" style="cursor:pointer;transition:var(--t)" onclick="viewRun('${r.run_id}')" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-size:.78rem;color:var(--orange-light);font-weight:700;font-family:monospace">${r.run_id}</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:4px">${new Date(r.started_at).toLocaleString()}</div>
+        <div style="margin-top:6px"><span class="status-badge status-resolved">${r.status.toUpperCase()}</span></div>
+        <div style="font-size:.74rem;color:var(--cream);margin-top:6px;line-height:1.4">${r.summary||''}</div>
+      </div>
+    `).join('');
+  }catch(e){
+    emp.textContent='Error loading history: '+e.message;
+  }
+}
+
+async function viewRun(id){
+  document.getElementById('histModal').classList.add('show');
+  document.getElementById('modalTitle').textContent='Pipeline Run: '+id;
+  const b=document.getElementById('modalBody');
+  b.innerHTML='<span class="spin"></span> Fetching run details from database...';
+  try{
+    const res=await fetch('/api/history/'+id);
+    const d=await res.json();
+    b.innerHTML=`
+      <h4 style="color:var(--orange-light);margin-bottom:.5rem;font-size:.85rem">SEVERITY ANALYSIS</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Region</th><th>Emergency</th><th>Score</th></tr></thead>
+          <tbody>
+            ${d.severity.map(r=>`<tr><td>${r.region_id}</td><td>${badge(r.predicted_emergency)}</td><td>${sevBar(r.severity_score)}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <h4 style="color:var(--orange-light);margin:.8rem 0 .5rem;font-size:.85rem">ALLOCATION DISPATCH</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Region</th><th>Water</th><th>Personnel</th><th>Machinery</th><th>Funds</th></tr></thead>
+          <tbody>
+            ${d.allocation.map(r=>`<tr><td>${r.region_id}</td><td>${r.water} KL</td><td>${r.personnel}</td><td>${r.machinery}</td><td>₹${r.funds.toLocaleString()}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }catch(e){
+    b.innerHTML=`<span style="color:var(--red)">Failed to load run: ${e.message}</span>`;
+  }
+}
+
+function closeModal(){ document.getElementById('histModal').classList.remove('show'); }
+
+// ═══ CHARTS ═══
+let ic, sc;
+function renderImpact(d){
+  if(ic)ic.destroy();
+  const ctx=document.getElementById('impactChart');
+  if(!ctx)return;
+  ic=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:d.labels,
+      datasets:[
+        {label:'Traditional Manual Planning',data:d.traditional,backgroundColor:'#1d4030',borderRadius:6},
+        {label:'AI-Driven Allocation',data:d.ai_based,backgroundColor:'#e85800',borderRadius:6}
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{labels:{color:'#f2eee6',font:{size:11}}}},
+      scales:{
+        x:{ticks:{color:'#829e8f'},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{ticks:{color:'#829e8f'},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'Response Days',color:'#829e8f'}}
+      }
+    }
+  });
+}
+
+function renderSev(d){
+  if(sc)sc.destroy();
+  const ctx=document.getElementById('sevChart');
+  if(!ctx)return;
+  sc=new Chart(ctx,{
+    type:'doughnut',
+    data:{
+      labels:d.map(r=>r.region_id.split(' - ')[1]||r.region_id),
+      datasets:[{
+        data:d.map(r=>r.severity_score),
+        backgroundColor:['#e85800','#ff7a29','#ffa114','#2a754e','#174730'],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{position:'bottom',labels:{color:'#f2eee6',font:{size:10},padding:10}}}
+    }
+  });
+}
+
+// ═══ CHATBOT & VOICE ═══
+function toggleChat(){ document.getElementById('chatPanel').classList.toggle('open'); }
+
+function quickAsk(text){
+  document.getElementById('chatInput').value=text;
+  sendChat();
+}
+
+async function sendChat(){
+  const inp=document.getElementById('chatInput');
+  const msg=inp.value.trim();
+  if(!msg)return;
+  const body=document.getElementById('chatBody');
+  body.innerHTML+=`<div class="chat-msg chat-user">${msg}</div>`;
+  inp.value='';
+  body.scrollTop=body.scrollHeight;
+
+  try{
+    const res=await fetch('/api/chatbot',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:msg})
+    });
+    const d=await res.json();
+    body.innerHTML+=`<div class="chat-msg chat-bot">${d.response}</div>`;
+    body.scrollTop=body.scrollHeight;
+    speak(d.response.replace(/[^\w\s.,!?-]/g,'').substring(0,180));
+  }catch(e){
+    body.innerHTML+=`<div class="chat-msg chat-bot" style="color:var(--red)">Connection Error: ${e.message}</div>`;
+  }
+}
+
+let recognition, isListening=false;
+function initVoice(){
+  if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window))return;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  recognition=new SR();
+  recognition.continuous=false;
+  recognition.interimResults=false;
+  recognition.lang='en-IN';
+
+  recognition.onresult=e=>{
+    const text=e.results[0][0].transcript;
+    document.getElementById('chatInput').value=text;
+    document.getElementById('chatPanel').classList.add('open');
+    sendChat();
+    stopListening();
+  };
+  recognition.onerror=()=>stopListening();
+  recognition.onend=()=>stopListening();
+}
+
+function toggleVoice(){
+  if(!recognition)initVoice();
+  if(!recognition){toast('Speech recognition not supported in this browser','warning');return;}
+  isListening?stopListening():startListening();
+}
+
+function startListening(){
+  isListening=true;
+  recognition.start();
+  document.getElementById('voiceBtn').classList.add('listening');
+  const tb=document.getElementById('voiceTopBtn');
+  if(tb){tb.style.background='var(--red)';tb.style.color='#fff';}
+  toast('🎤 Listening... Speak your question now!','info');
+}
+
+function stopListening(){
+  isListening=false;
+  try{recognition.stop()}catch(e){}
+  document.getElementById('voiceBtn').classList.remove('listening');
+  const tb=document.getElementById('voiceTopBtn');
+  if(tb){tb.style.background='';tb.style.color='';}
+}
+
+function speak(text){
+  if(!('speechSynthesis' in window))return;
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='en-IN';
+  u.rate=1;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+// ═══ INITIALIZATION ═══
+renderStats();
+initMiniMap();
+fetchSystemStatus();
+loadAlerts();
+initVoice();
+</script>
+</body>
+</html>
